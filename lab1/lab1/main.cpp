@@ -14,12 +14,11 @@ int main (int argc, char* argv[])
     string creatorConsole = string ("Z:\\home\\lucian\\University\\labOS\\lab1\\lab1-build-desktop\\creator.exe");
     //string creatorConsole=string ("creator.exe");
     cout<<"Binary filename for CREATOR output: ";
-    string params;
+    string params=string();
 
+    //
+    //AllocConsole();
     cin>>params;
-   // creatorConsole+=" ";
-   // creatorConsole+=params;
-    //const char* tmp
     cout<<"Trying to start CREATOR process ("<<creatorConsole<<")\n";
     if (!CreateProcess(creatorConsole.c_str(), params.c_str(), NULL, NULL, FALSE, CREATE_NEW_CONSOLE, NULL, NULL, &creatorStartupInfo, &creatorProcessInfo))
     {
