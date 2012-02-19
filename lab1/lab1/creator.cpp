@@ -38,7 +38,7 @@ int main (int argc, char*  argv [])
         cin>>tmp[i].price;
     }
 
-    fwrite(&tmp,1,sizeof(order)*count,fout);
+    fwrite(&tmp,sizeof(order),count,fout);
     fclose(fout);
     return 0;
 }
