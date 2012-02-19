@@ -1,4 +1,6 @@
 #include <iostream>
+#include <math.h>
+#include <stdlib.h>
 #include <cstdio>
 
 using namespace std;
@@ -43,7 +45,7 @@ int main (int argc, char* argv[])
    rewind (fbin);
    fread (records,sizeof(order),count,fbin);
    fclose (fbin);
-   fprinf (frep,"REPORT FILE \'%s\'\n\n",fbinName);
+   fprintf (frep,"REPORT FILE \'%s\'\n\n",fbinName);
 
    for (int i=0;i<count;i++)
    {
@@ -52,7 +54,7 @@ int main (int argc, char* argv[])
            fprintf (frep,"Product: %s\n",records[i].name);
            fprintf (frep,"Amount: %d\n",records[i].amount);
            fprintf (frep,"Total price: %8.3lf\n",records[i].price*records[i].amount);
-           fprinf (frep,"\n\n");
+           fprintf (frep,"\n\n");
        }
    }
    fclose (frep);
