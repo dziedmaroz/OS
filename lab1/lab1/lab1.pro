@@ -17,4 +17,5 @@ TEMPLATE = app
 
 SOURCES += \
     creator.cpp \
-    reporter.cpp
+    reporter.cpp \
+    main.cpp
