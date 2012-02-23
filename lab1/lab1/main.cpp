@@ -18,9 +18,11 @@ int main (int argc, char* argv[])
 
     //
     //AllocConsole();
+    char* paramsCH;
     cin>>params;
+    paramsCH = params.c_str();
     cout<<"Trying to start CREATOR process ("<<creatorConsole<<")\n";
-    if (!CreateProcess(creatorConsole.c_str(), params.c_str(), NULL, NULL, FALSE, CREATE_NEW_CONSOLE, NULL, NULL, &creatorStartupInfo, &creatorProcessInfo))
+    if (!CreateProcess(creatorConsole.c_str(), paramsCH, NULL, NULL, FALSE, NULL, NULL, NULL, &creatorStartupInfo, &creatorProcessInfo))
     {
         cout<<"ERR: The new process (CREATOR) is not created\n";
         return 100;
