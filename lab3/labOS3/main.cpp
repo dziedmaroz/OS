@@ -18,32 +18,17 @@ DWORD WINAPI marker (LPVOID argument)
 {
     MarkerArgs arg = *((MarkerArgs*) argument);
     srand( arg.id);
-    bool firstRun = true;
+    bool slp = false;
     while(true)
     {
         MSG msg;
-        msg.message = 0;
         BOOL msgReturn = GetMessage (&msg, NULL, RUN_AGAIN, KILL_ME_PLS);
-        if (msgReturn || firstRun)
+        if (msgReturn)
         {
-            int tmp = rand()%arg.arrSize;
+
             switch (msg.message)
             {
-            case 0:;
-            case RUN_AGAIN:
-
-                if (arg.arrP[tmp]==0)
-                {
-                    sleep(5);
-                    arg.arrP[tmp]= arg.id;
-                    sleep(5);
-                }
-                else
-                {
-                    printf ("Thread .id: %d  INDEX: %d\n", arg.id, tmp);
-                    arg.hEvent = CreateEvent (NULL, false, false, "STOPED");
-                }
-                break;
+            case RUN_AGAIN:slp = false;  break;
             case KILL_ME_PLS:
                 for (int i=0;i<arg.arrSize;i++)
                 {
@@ -58,6 +43,22 @@ DWORD WINAPI marker (LPVOID argument)
 
             }
 
+        }
+        if (slp)
+        {
+            int tmp = rand()%arg.arrSize;
+            if (arg.arrP[tmp]==0)
+            {
+                sleep(5);
+                arg.arrP[tmp]= arg.id;
+                sleep(5);
+            }
+            else
+            {
+                printf ("Thread .id: %d  INDEX: %d\n", arg.id, tmp);
+                arg.hEvent = CreateEvent (NULL, false, false, "STOPED");
+                slp = true;
+            }
         }
     }
 }
