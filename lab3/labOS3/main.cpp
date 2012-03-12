@@ -19,17 +19,26 @@ DWORD WINAPI marker (LPVOID argument)
     MarkerArgs arg = *((MarkerArgs*) argument);
     srand( arg.id);
     bool slp = false;
+    cout<<"Hello, thread #"<<arg.id<<endl;
     while(true)
     {
+        cout<<"Sleeping "<<slp<<endl;
         MSG msg;
         BOOL msgReturn = GetMessage (&msg, NULL, RUN_AGAIN, KILL_ME_PLS);
+        cout<<"Some message?  ";
+        msgReturn?(cout<<"[YES]"):(cout<<"[NO]");
+        cout<<endl;
         if (msgReturn)
         {
-
+            cout<<"BANG!\n";
             switch (msg.message)
             {
-            case RUN_AGAIN:slp = false;  break;
+            case RUN_AGAIN:
+                slp = false;
+                cout<<"RESUME thread #"<<arg.id;
+                break;
             case KILL_ME_PLS:
+                cout<<"Thread "<<arg.id<<" is dying...\n";
                 for (int i=0;i<arg.arrSize;i++)
                 {
                     if ( arg.arrP[i]==arg.id)
@@ -38,52 +47,59 @@ DWORD WINAPI marker (LPVOID argument)
                     }
                 }
                 arg.hEvent = CreateEvent (NULL, false, false, "KILLED");
+                SetEvent (arg.hEvent);
                 ExitThread(0);
                 break;
 
             }
 
         }
-        if (slp)
+        if (!slp)
         {
+            cout<<"Thread #"<<arg.id<<" not sleeping\n";
             int tmp = rand()%arg.arrSize;
             if (arg.arrP[tmp]==0)
             {
                 sleep(5);
                 arg.arrP[tmp]= arg.id;
+                cout<<"Thread #"<<arg.id<<" just generated some number\n";
                 sleep(5);
             }
             else
             {
-                printf ("Thread .id: %d  INDEX: %d\n", arg.id, tmp);
+                printf ("Thread .id: %d STOPED at  %d\n", arg.id, tmp);
                 arg.hEvent = CreateEvent (NULL, false, false, "STOPED");
+                SetEvent (arg.hEvent);
                 slp = true;
             }
         }
     }
 }
 
-void removeThread (HANDLE* hThreads, DWORD* threadIDs, MarkerArgs* args,HANDLE* hEvents,int pos,int* sz)
+void removeThread (HANDLE* hThreads, DWORD* threadIDs, MarkerArgs* args,HANDLE* hEvents,int pos,int &sz)
 {
-    CloseHandle ( hEvents[pos] );
-    CloseHandle ( hThreads[pos]);
-    for (int i=pos;i<*sz-1;i++)
+    if (pos<sz && pos >= 0)
     {
-        hThreads[i]=hThreads[i+1];
-        threadIDs[i]=threadIDs[i+1];
-        args[i]=args[i+1];
-        hEvents[i]=hEvents[i+1];
+        CloseHandle ( hEvents[pos] );
+        CloseHandle ( hThreads[pos]);
+        for (int i=pos;i<sz-1;i++)
+        {
+            hThreads[i]=hThreads[i+1];
+            threadIDs[i]=threadIDs[i+1];
+            args[i]=args[i+1];
+            hEvents[i]=hEvents[i+1];
+        }
+        sz--;
     }
-    sz--;
-    delete &hThreads[*sz];
-    delete &threadIDs[*sz];
-    delete &args[*sz];
-    delete &hEvents[*sz];
+    else
+    {
+        cout<<"Wrong thread index on removeThread\n";
+    }
 }
 
 void clearEvents (HANDLE* hEvents, int sz)
 {
-    for (int i=0;i<sz;i++) hEvents[i]=NULL;
+    for (int i=0;i<sz;i++)    SetEvent (hEvents[i]);
 }
 
 void printArr (int* arr, int sz)
@@ -119,31 +135,42 @@ int main ()
         args[i].arrSize = arrSz;
         args[i].id =  i;
         args[i].hEvent = hEvents[i];
+        ResetEvent(hEvents[i]);
         hThreads[i] = CreateThread (NULL, 0, marker,(LPVOID)&args[i],0, &threadIDs[i]);
+        cout<<"Starting thread #"<<i<<"...         ";
         if (!hThreads[i])
         {
-            cout<<"Error on "<<i<<"\'s \'marker\'  thread creation\n";
+            cout<<"[ERR]\n\t on "<<i<<"\'s \'marker\'  thread creation\n";
         }
-        else workingThreads++;
+        else
+        {
+            workingThreads++;
+            cout<<"[OK]\n";
+        }
     }
 
     while(threadCount!=0)
     {
+        for (int i=0;i<threadCount;i++) ResetEvent (hEvents[i]);
         cout<<"================================\n\n";
         WaitForMultipleObjects (threadCount,hEvents,true,INFINITE);
         printArr(arr,arrSz);
 
-        cout<<"Kill thread no?\n>";
+        cout<<"Kill thread no?[0.."<<threadCount-1<<"]\n>";
         int x = 0;
         cin>>x;
+        cout<<"Killing thread #"<<x<<"..."<<endl;
+        for (int i=0;i<threadCount;i++) ResetEvent (hEvents[i]);
+        cout<<"Clear hEvents...\n";
 
         PostThreadMessage (threadIDs[x], KILL_ME_PLS, 0,0);
-        clearEvents(hEvents,threadCount);
+        cout<<"Posted thread message. Waiting...\n";
         WaitForSingleObject (hEvents[x],INFINITE);
         printArr(arr,arrSz);
-        removeThread(hThreads,threadIDs,args,hEvents,x,&threadCount);
-
-
+        cout<<"Removing thread from pool...\n";
+        removeThread(hThreads,threadIDs,args,hEvents,x,threadCount);
+        cout<<"Thread count:"<<threadCount<<endl;
+        cout<<"Resuming threads...\n";
         for (int i=0;i<threadCount;i++)
         {
             PostThreadMessage (threadIDs[i], RUN_AGAIN, 0,0);
@@ -154,8 +181,8 @@ int main ()
 
 
     delete [] arr;
-    //delete [] hThreads;
-    //delete [] threadIDs;
-    //delete [] args;
+     delete [] hThreads;
+     delete [] threadIDs;
+     delete [] args;
     return 0;
 }
