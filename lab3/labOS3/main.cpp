@@ -16,68 +16,57 @@ struct MarkerArgs
 
 DWORD WINAPI marker (LPVOID argument)
 {
-    MarkerArgs arg = (MarkerArgs*) argument;
-    srand((MarkerArgs*) arg->ID);
+    MarkerArgs arg = *((MarkerArgs*) argument);
+    srand( arg.id);
     bool firstRun = true;
     while(true)
     {
-        MSG msg=NULL;
+        MSG msg;
+        msg.message = 0;
         BOOL msgReturn = GetMessage (&msg, NULL, RUN_AGAIN, KILL_ME_PLS);
         if (msgReturn || firstRun)
         {
-            if (msg!=NULL)
+            int tmp = rand()%arg.arrSize;
+            switch (msg.message)
             {
-                switch (msg.message)
-                {
-                    case RUN_AGAIN:
-                        int tmp = rand()%(MarkerArgs*) arg->arrSize;
-                        if ((MarkerArgs*)arg->arrP[tmp]==0)
-                        {
-                            sleep(5);
-                            (MarkerArgs*)arg->arrP[tmp]=(MarkerArgs*) arg->ID;
-                            sleep(5);
-                        }
-                        else
-                        {
-                            printf ("Thread ID: %d  INDEX: %d\n", (MarkerArgs*)arg->ID, tmp);
-                            (MarkerArgs*)arg->hEvent = CreateEvent (NULL, false, false, "STOPED");
-                        }
-                        break;
-                   case KILL_ME_PLS:
-                        for (int i=0;i<(MarkerArgs*) arg->arrSize;i++)
-                        {
-                            if ((MarkerArgs*) arg->arrP[i]==(MarkerArgs*)arg->id)
-                            {
-                              (MarkerArgs*) arg->arrP[i]=0;
-                            }
-                        }
-                        (MarkerArgs*)arg->hEvent = CreateEvent (NULL, false, false, "KILLED");
-                        ExitThread(0);
-                        break;
-                }
-            }
-            else
-            {
-                int tmp = rand()%(MarkerArgs*) arg->arrSize;
-                if ((MarkerArgs*)arg->arrP[tmp]==0)
+            case 0:;
+            case RUN_AGAIN:
+
+                if (arg.arrP[tmp]==0)
                 {
                     sleep(5);
-                    (MarkerArgs*)arg->arrP[tmp]=(MarkerArgs*) arg->ID;
+                    arg.arrP[tmp]= arg.id;
                     sleep(5);
                 }
                 else
                 {
-                    printf ("Thread ID: %d  INDEX: %d\n", (MarkerArgs*)arg->ID, tmp);
-                    (MarkerArgs*)arg->hEvent = CreateEvent (NULL, false, false, "STOPED");
+                    printf ("Thread .id: %d  INDEX: %d\n", arg.id, tmp);
+                    arg.hEvent = CreateEvent (NULL, false, false, "STOPED");
                 }
+                break;
+            case KILL_ME_PLS:
+                for (int i=0;i<arg.arrSize;i++)
+                {
+                    if ( arg.arrP[i]==arg.id)
+                    {
+                        arg.arrP[i]=0;
+                    }
+                }
+                arg.hEvent = CreateEvent (NULL, false, false, "KILLED");
+                ExitThread(0);
+                break;
+
             }
+
         }
     }
 }
 
-void removeThread (HANDLE* hThreads, DWORD* threadIDs, MarkerArgs* args,HANDLE* hEvents,int pos,int &sz)
+void removeThread (HANDLE* hThreads, DWORD* threadIDs, MarkerArgs* args,HANDLE* hEvents,int pos,int* sz)
 {
-    for (int i=pos;i<sz-1;i++)
+    CloseHandle ( hEvents[pos] );
+    CloseHandle ( hThreads[pos]);
+    for (int i=pos;i<*sz-1;i++)
     {
         hThreads[i]=hThreads[i+1];
         threadIDs[i]=threadIDs[i+1];
@@ -85,10 +74,10 @@ void removeThread (HANDLE* hThreads, DWORD* threadIDs, MarkerArgs* args,HANDLE* 
         hEvents[i]=hEvents[i+1];
     }
     sz--;
-    delete hThreads[sz];
-    delete threadIDs[sz];
-    delete args[sz];
-    delete hEvents[sz];
+    delete &hThreads[*sz];
+    delete &threadIDs[*sz];
+    delete &args[*sz];
+    delete &hEvents[*sz];
 }
 
 void clearEvents (HANDLE* hEvents, int sz)
@@ -110,7 +99,7 @@ int main ()
     int arrSz=0;
     cout<<"Array size: ";
     cin>>arrSz;
-    int* arr = new int[n];
+    int* arr = new int[arrSz];
     int threadCount = 0;
     cout<<"# instances of \'marker\': ";
     cin>>threadCount;
@@ -129,7 +118,7 @@ int main ()
         args[i].arrSize = arrSz;
         args[i].id =  i;
         args[i].hEvent = hEvents[i];
-        hThreads[i] = CreateThread (NULL, 0, marker,(LPVOID)&args[i], &threadIDs[i]);
+        hThreads[i] = CreateThread (NULL, 0, marker,(LPVOID)&args[i],0, &threadIDs[i]);
         if (!hThreads[i])
         {
             cout<<"Error on "<<i<<"\'s \'marker\'  thread creation\n";
