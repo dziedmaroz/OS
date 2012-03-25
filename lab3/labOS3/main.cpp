@@ -132,12 +132,12 @@ int main ()
     //Запустить заданное количество экземпляров потока marker. В качестве параметра
     //каждому экземпляру потока marker передать его порядковый номер в запуске.
 
-    HANDLE* hThreads = new HANDLE [markerCount];
-    DWORD* threadIDs = new DWORD [markerCount];
-    HANDLE* stopedEvents = new HANDLE [markerCount];
+    HANDLE* hThreads = new HANDLE [markerCount]; //массив дескрипторов потоков
+    DWORD* threadIDs = new DWORD [markerCount]; // массив идентификаторов потоков
+    HANDLE* stopedEvents = new HANDLE [markerCount]; // массив дескрипторов событий сообщающих, что поток подошел к тупику
 
-    bool* killMask = new bool [markerCount];
-    for (int i=0;i<markerCount;i++) killMask[i] = false;
+    bool* killMask = new bool [markerCount]; // маска "убитых" потоков
+    for (int i=0;i<markerCount;i++) killMask[i] = false; // все потоки живы
 
     MarkerArgs* args = new MarkerArgs [markerCount];
 
@@ -167,8 +167,8 @@ int main ()
             printf ("[OK]\n");
         }
     }
-    //Дать сигнал на начало работы всех потоков marker.
 
+    //Дать сигнал на начало работы всех потоков marker.
     for (int i=0;i<markerCount;i++)
     {
         printf ("Starting thread %d...\n",i+1);
@@ -198,12 +198,16 @@ int main ()
             }
             stopedEvents[i] = args[i].stoppedEvent;
         }
+
+
         //Вывести содержимое массива на консоль
         for (int i=0;i<arrSz;i++)
         {
             printf ("%3d ",array[i]);
         }
         printf ("\n");
+
+
         //Запросить с консоли порядковый номер потока marker, которому будет подан
         //сигнал на завершение своей работы.
         printf ("Witch of  threads do you want to kill [");
@@ -214,20 +218,25 @@ int main ()
         printf ("]: ");
         int kill = 0;
         scanf ("%d",&kill);
+
+
         //Подать потоку marker, номер которого получен в пункте 6.3, сигнал на
         //завершение работы.
         printf ("Sending  killEvent to %d thread...\n",kill);
         SetEvent(args[kill-1].killEvent);
+
+
         //Ждать завершение работы потока marker, которому был подан сигнал на
         //завершение работы
-
         WaitForSingleObject (args[kill-1].stoppedEvent,INFINITE);
+
         //Вывести содержимое массива на консоль.
         for (int i=0;i<arrSz;i++)
         {
             printf ("%3d ",array[i]);
         }
         printf ("\n");
+
         //Подать сигнал на продолжение работы, оставшимся потокам marker.
         for (int i=0;i<markerCount;i++)
         {
