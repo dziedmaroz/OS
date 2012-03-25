@@ -26,7 +26,9 @@ DWORD WINAPI marker (LPVOID argument)
     //Инициализировать генерацию последовательности случайных чисел. Для этого
     //использовать функцию srand, которой передать в качестве аргумента свой
     //порядковый номер.
-    srand (time(NULL));
+    //srand (time(NULL));
+    srand (args.id); //не генерирует новых последовательностей
+
     //Работать циклически, выполняя на каждом цикле следующие действия:
     while (true)
     {
@@ -34,6 +36,7 @@ DWORD WINAPI marker (LPVOID argument)
         //Разделить это число по модулю на размерность массива.
         int randomNum = rand()%args.arrSize;
         printf("[THREAD %d] just generated %d\n",args.id,randomNum);
+
         //Если элемент массива, индекс которого равен результату деления, равен нулю, то
         //выполнить следующие действия:
         if (args.arrP[randomNum]==0)
@@ -55,17 +58,17 @@ DWORD WINAPI marker (LPVOID argument)
             //Вывести на консоль свой порядковый номер.
             //Вывести на консоль индекс элемента массива, который невозможно
             //пометить.
-
             printf ("[THREAD %d]  STOPED at %d\n",args.id,randomNum);
 
             //Дать сигнал потоку main на невозможность продолжения своей работы.
-
             SetEvent (args.stoppedEvent);
+
             //Ждать ответный сигнал на продолжение или завершение работы от потока
             //main.
             HANDLE* events = new HANDLE [2];
             events[0] = args.resumeEvent;
             events[1] = args.killEvent;
+
             //Если получен сигнал на завершение работы, то выполнить следующие действия:
             if (WaitForMultipleObjects (2,events,FALSE, INFINITE)-WAIT_OBJECT_0 == 1)
             {
