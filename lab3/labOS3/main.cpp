@@ -1,105 +1,110 @@
 #include <iostream>
 #include <windows.h>
 #include <cstdio>
+#include <time.h>
 using namespace std;
 
-#define KILL_ME_PLS WM_USER + 1
-#define RUN_AGAIN WM_USER + 2
 
 struct MarkerArgs
 {
     int id;
     int arrSize;
     int* arrP;
-    HANDLE hEvent;
+    CRITICAL_SECTION* cs;
+    HANDLE startEvent;
+    HANDLE stoppedEvent;
+    HANDLE resumeEvent;
+    HANDLE killEvent;
+
 };
 
 DWORD WINAPI marker (LPVOID argument)
 {
-    MarkerArgs arg = *((MarkerArgs*) argument);
-    srand( arg.id);
-    bool slp = false;
-    cout<<"Hello, thread #"<<arg.id<<endl;
-    while(true)
+    //Начать работу по сигналу от потока main.
+    MarkerArgs args = *((MarkerArgs*)argument);
+  //  EnterCriticalSection (args.cs);
+    printf ("Thread #%d waiting for start signal\n",args.id);
+  //  LeaveCriticalSection (args.cs);
+    WaitForSingleObject (args.startEvent,INFINITE);
+    //Инициализировать генерацию последовательности случайных чисел. Для этого
+    //использовать функцию srand, которой передать в качестве аргумента свой
+    //порядковый номер.
+    srand (args.id);
+    //Работать циклически, выполняя на каждом цикле следующие действия:
+    while (true)
     {
-        cout<<"Sleeping "<<slp<<endl;
-        MSG msg;
-        BOOL msgReturn = GetMessage (&msg, NULL, RUN_AGAIN, KILL_ME_PLS);
-        cout<<"Some message?  ";
-        msgReturn?(cout<<"[YES]"):(cout<<"[NO]");
-        cout<<endl;
-        if (msgReturn)
+        //Генерировать случайное число, используя функцию rand.
+        //Разделить это число по модулю на размерность массива.
+        int randomNum = rand()%args.arrSize;
+
+
+        //Если элемент массива, индекс которого равен результату деления, равен нулю, то
+        //выполнить следующие действия:
+
+        if (args.arrP[randomNum]==0)
         {
-            cout<<"BANG!\n";
-            switch (msg.message)
+
+            //Поспать 5 миллисекунд.
+            Sleep (5);
+
+            //Занести в элемент, индекс которого вычислен, свой порядковый номер.
+            args.arrP[randomNum]=args.id;
+
+            //Поспать 5 миллисекунд.
+            Sleep(5);
+
+            //Продолжить исполнение цикла 3.
+        }
+        //В противном случае:
+        else
+        {
+            //Вывести на консоль свой порядковый номер.
+            //Вывести на консоль индекс элемента массива, который невозможно
+            //пометить.
+
+            //printf ("Thread id: %d stoped at %d\n",&rand,&rand);
+            cout<<"Thread id:"<<args.id<<" stoped at "<<rand<<endl;
+            //Дать сигнал потоку main на невозможность продолжения своей работы.
+
+            SetEvent (args.stoppedEvent);
+            //Ждать ответный сигнал на продолжение или завершение работы от потока
+            //main.
+            HANDLE* events = new HANDLE [2];
+            events[0] = args.resumeEvent;
+            events[1] = args.killEvent;
+            //Если получен сигнал на завершение работы, то выполнить следующие действия:
+            if (WaitForMultipleObjects (2,events,FALSE, INFINITE)-WAIT_OBJECT_0 == 1)
             {
-            case RUN_AGAIN:
-                slp = false;
-                cout<<"RESUME thread #"<<arg.id;
-                break;
-            case KILL_ME_PLS:
-                cout<<"Thread "<<arg.id<<" is dying...\n";
-                for (int i=0;i<arg.arrSize;i++)
+                //Заполнить нулями в массиве все элементы, которые он пометил.
+                //Завершить работу.
+                printf ("%d received KILL_SIGNAL...\n",args.id);
+                for (int i=0;i<args.arrSize;i++)
                 {
-                    if ( arg.arrP[i]==arg.id)
+                    if (args.arrP[i]==args.id)
                     {
-                        arg.arrP[i]=0;
+                        args.arrP[i]=0;
                     }
                 }
-                arg.hEvent = CreateEvent (NULL, false, false, "KILLED");
-                SetEvent (arg.hEvent);
+                SetEvent(args.stoppedEvent);
                 ExitThread(0);
-                break;
-
             }
-
-        }
-        if (!slp)
-        {
-            cout<<"Thread #"<<arg.id<<" not sleeping\n";
-            int tmp = rand()%arg.arrSize;
-            if (arg.arrP[tmp]==0)
-            {
-                sleep(5);
-                arg.arrP[tmp]= arg.id;
-                cout<<"Thread #"<<arg.id<<" just generated some number\n";
-                sleep(5);
-            }
-            else
-            {
-                printf ("Thread .id: %d STOPED at  %d\n", arg.id, tmp);
-                arg.hEvent = CreateEvent (NULL, false, false, "STOPED");
-                SetEvent (arg.hEvent);
-                slp = true;
-            }
+            //Если получен сигнал на продолжение работы, то продолжить исполнение цикла
+            printf ("Thread %d resumed...\n",args.id);
+            ResetEvent (args.stoppedEvent);
         }
     }
+
+
 }
 
 void removeThread (HANDLE* hThreads, DWORD* threadIDs, MarkerArgs* args,HANDLE* hEvents,int pos,int &sz)
 {
-    if (pos<sz && pos >= 0)
-    {
-        CloseHandle ( hEvents[pos] );
-        CloseHandle ( hThreads[pos]);
-        for (int i=pos;i<sz-1;i++)
-        {
-            hThreads[i]=hThreads[i+1];
-            threadIDs[i]=threadIDs[i+1];
-            args[i]=args[i+1];
-            hEvents[i]=hEvents[i+1];
-        }
-        sz--;
-    }
-    else
-    {
-        cout<<"Wrong thread index on removeThread\n";
-    }
+
 }
 
 void clearEvents (HANDLE* hEvents, int sz)
 {
-    for (int i=0;i<sz;i++)    SetEvent (hEvents[i]);
+
 }
 
 void printArr (int* arr, int sz)
@@ -113,76 +118,159 @@ void printArr (int* arr, int sz)
 
 int main ()
 {
-    int arrSz=0;
-    cout<<"Array size: ";
-    cin>>arrSz;
-    int* arr = new int[arrSz];
-    int threadCount = 0;
-    cout<<"# instances of \'marker\': ";
-    cin>>threadCount;
-    for (int i=0;i<arrSz;i++) arr[i]=0;
+    //Захватить память под массив целых чисел, размерность которого вводится с консоли.
+    int arrSz = 0;
+    printf ("Set array size: ");
+    scanf("%d",&arrSz);
+    int* array = new int [arrSz];
 
-    HANDLE* hThreads = new HANDLE[threadCount];
-    DWORD* threadIDs = new DWORD [threadCount];
-    MarkerArgs* args = new MarkerArgs [threadCount];
-    HANDLE* hEvents = new HANDLE [threadCount];
-    clearEvents(hEvents,threadCount);
-    int workingThreads = 0;
-
-    for (int i=0;i<threadCount;i++)
+    //Инициализировать элементы массива нулями.
+    for (int i=0;i<arrSz;i++)
     {
-        args[i].arrP = arr;
+        array[i]=0;
+    }
+
+    //Запросить количество потоков marker, которые требуется запустить.
+    int markerCount = 0;
+    printf("Set amount of instances of \'maker\': ");
+    scanf("%d",&markerCount);
+
+    //Запустить заданное количество экземпляров потока marker. В качестве параметра
+    //каждому экземпляру потока marker передать его порядковый номер в запуске.
+
+    HANDLE* hThreads = new HANDLE [markerCount];
+    DWORD* threadIDs = new DWORD [markerCount];
+
+    HANDLE* resumeEvents = new HANDLE [markerCount];
+    HANDLE* startEvents = new HANDLE [markerCount];
+    HANDLE* stopedEvents = new HANDLE [markerCount];
+    HANDLE* killEvnets = new HANDLE [markerCount];
+    bool* killMask = new bool [markerCount];
+    for (int i=0;i<markerCount;i++) killMask[i] = false;
+
+    CRITICAL_SECTION* cs;
+
+    MarkerArgs* args = new MarkerArgs [markerCount];
+    //InitializeCriticalSection(cs);
+
+    for (int i=0;i<markerCount;i++)
+    {
+        //Инициализация аргументов
+        args[i].id = i+1;
+        args[i].arrP = array;
         args[i].arrSize = arrSz;
-        args[i].id =  i;
-        args[i].hEvent = hEvents[i];
-        ResetEvent(hEvents[i]);
-        hThreads[i] = CreateThread (NULL, 0, marker,(LPVOID)&args[i],0, &threadIDs[i]);
-        cout<<"Starting thread #"<<i<<"...         ";
-        if (!hThreads[i])
+        args[i].cs =cs;
+       // stopedEvents[i] = CreateEvent (NULL,FALSE,FALSE,NULL);
+       // startEvents[i] = CreateEvent (NULL,FALSE,FALSE,NULL);
+        args[i].stoppedEvent =  CreateEvent (NULL,FALSE,FALSE,NULL);
+        stopedEvents[i] = args[i].stoppedEvent;
+        args[i].startEvent =  CreateEvent (NULL,FALSE,FALSE,NULL);
+        startEvents[i] = args[i].startEvent;
+        args[i].resumeEvent = CreateEvent (NULL,FALSE,FALSE,NULL);
+        resumeEvents[i] = args[i].resumeEvent;
+        args[i].killEvent = CreateEvent (NULL,FALSE,FALSE,NULL);
+        killEvnets [i] = args[i].killEvent;
+
+        printf ("Creating thread %d    ",i+1);
+        hThreads[i] = CreateThread(NULL, 0, marker, &args[i], 0, &threadIDs[i]);
+        if (hThreads[i]==NULL)
         {
-            cout<<"[ERR]\n\t on "<<i<<"\'s \'marker\'  thread creation\n";
+            printf ("\n[ERR] Error on creation thread #%d",i+1);
         }
         else
         {
-            workingThreads++;
-            cout<<"[OK]\n";
+            printf ("[OK]\n");
         }
     }
+    //Дать сигнал на начало работы всех потоков marker.
 
-    while(threadCount!=0)
+    for (int i=0;i<markerCount;i++)
     {
-        for (int i=0;i<threadCount;i++) ResetEvent (hEvents[i]);
-        cout<<"================================\n\n";
-        WaitForMultipleObjects (threadCount,hEvents,true,INFINITE);
-        printArr(arr,arrSz);
+        printf ("Starting thread %d...\n",i+1);
+        SetEvent (args[i].startEvent);
+    }
+    int threadCount = markerCount;
+    while (threadCount!=0)
+    {
 
-        cout<<"Kill thread no?[0.."<<threadCount-1<<"]\n>";
-        int x = 0;
-        cin>>x;
-        cout<<"Killing thread #"<<x<<"..."<<endl;
-        for (int i=0;i<threadCount;i++) ResetEvent (hEvents[i]);
-        cout<<"Clear hEvents...\n";
-
-        PostThreadMessage (threadIDs[x], KILL_ME_PLS, 0,0);
-        cout<<"Posted thread message. Waiting...\n";
-        WaitForSingleObject (hEvents[x],INFINITE);
-        printArr(arr,arrSz);
-        cout<<"Removing thread from pool...\n";
-        removeThread(hThreads,threadIDs,args,hEvents,x,threadCount);
-        cout<<"Thread count:"<<threadCount<<endl;
-        cout<<"Resuming threads...\n";
-        for (int i=0;i<threadCount;i++)
+        // Ждать, пока все потоки marker не подадут сигналы о невозможности
+        //продолжения своей работы.
+        printf ("Waiting for threads ...\n");
+        for (int i=0;i<markerCount;i++)
         {
-            PostThreadMessage (threadIDs[i], RUN_AGAIN, 0,0);
-        }
-        cout<<"\n\n";
+            if (killMask[i])
+            {
+                SetEvent(stopedEvents[i]);
+            }
 
+        }
+        WaitForMultipleObjects (markerCount,stopedEvents,TRUE, INFINITE);
+        for (int i =0;i<markerCount;i++)
+        {
+            if (!killMask[i])
+            {
+                ResetEvent(args[i].stoppedEvent);
+            }
+            stopedEvents[i] = args[i].stoppedEvent;
+        }
+        //Вывести содержимое массива на консоль
+        for (int i=0;i<arrSz;i++)
+        {
+            printf ("%3d ",array[i]);
+        }
+        printf ("\n");
+        //Запросить с консоли порядковый номер потока marker, которому будет подан
+        //сигнал на завершение своей работы.
+        printf ("Witch of  threads do you want to kill [");
+        for (int i=0;i<markerCount;i++)
+        {
+            if (!killMask[i]) printf (" %d ",i+1);
+        }
+        printf ("]: ");
+        int kill = 0;
+        scanf ("%d",&kill);
+        //Подать потоку marker, номер которого получен в пункте 6.3, сигнал на
+        //завершение работы.
+        printf ("Sending  killEvent to %d thread...\n",kill);
+        SetEvent(args[kill-1].killEvent);
+        //Ждать завершение работы потока marker, которому был подан сигнал на
+        //завершение работы
+
+        WaitForSingleObject (args[kill-1].stoppedEvent,INFINITE);
+        //Вывести содержимое массива на консоль.
+        for (int i=0;i<arrSz;i++)
+        {
+            printf ("%3d ",array[i]);
+        }
+        printf ("\n");
+        //Подать сигнал на продолжение работы, оставшимся потокам marker.
+        for (int i=0;i<markerCount;i++)
+        {
+            if (i!=kill-1)
+            {
+                SetEvent(args[i].resumeEvent);
+            }
+            else
+            {
+                CloseHandle (hThreads[i]);
+                threadCount--;
+                killMask[kill-1]=true;
+                SetEvent (args[kill-1].stoppedEvent);
+            }
+        }
     }
 
 
-    delete [] arr;
-     delete [] hThreads;
-     delete [] threadIDs;
-     delete [] args;
+
+    //Высвобождение памяти
+    delete[] array;
+    delete[]hThreads;
+    delete[] args;
+
+    delete [] startEvents;
+    delete [] stopedEvents;
+    delete [] resumeEvents;
+    delete [] killEvnets;
+
     return 0;
 }
