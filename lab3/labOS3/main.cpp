@@ -10,7 +10,6 @@ struct MarkerArgs
     int id;
     int arrSize;
     int* arrP;
-    CRITICAL_SECTION* cs;
     HANDLE startEvent;
     HANDLE stoppedEvent;
     HANDLE resumeEvent;
@@ -22,25 +21,21 @@ DWORD WINAPI marker (LPVOID argument)
 {
     //Начать работу по сигналу от потока main.
     MarkerArgs args = *((MarkerArgs*)argument);
-  //  EnterCriticalSection (args.cs);
     printf ("Thread #%d waiting for start signal\n",args.id);
-  //  LeaveCriticalSection (args.cs);
     WaitForSingleObject (args.startEvent,INFINITE);
     //Инициализировать генерацию последовательности случайных чисел. Для этого
     //использовать функцию srand, которой передать в качестве аргумента свой
     //порядковый номер.
-    srand (args.id);
+    srand (time(NULL));
     //Работать циклически, выполняя на каждом цикле следующие действия:
     while (true)
     {
         //Генерировать случайное число, используя функцию rand.
         //Разделить это число по модулю на размерность массива.
         int randomNum = rand()%args.arrSize;
-
-
+        printf("[THREAD %d] just generated %d\n",args.id,randomNum);
         //Если элемент массива, индекс которого равен результату деления, равен нулю, то
         //выполнить следующие действия:
-
         if (args.arrP[randomNum]==0)
         {
 
@@ -52,7 +47,6 @@ DWORD WINAPI marker (LPVOID argument)
 
             //Поспать 5 миллисекунд.
             Sleep(5);
-
             //Продолжить исполнение цикла 3.
         }
         //В противном случае:
@@ -62,8 +56,8 @@ DWORD WINAPI marker (LPVOID argument)
             //Вывести на консоль индекс элемента массива, который невозможно
             //пометить.
 
-            //printf ("Thread id: %d stoped at %d\n",&rand,&rand);
-            cout<<"Thread id:"<<args.id<<" stoped at "<<rand<<endl;
+            printf ("[THREAD %d]  STOPED at %d\n",args.id,randomNum);
+
             //Дать сигнал потоку main на невозможность продолжения своей работы.
 
             SetEvent (args.stoppedEvent);
@@ -140,18 +134,12 @@ int main ()
 
     HANDLE* hThreads = new HANDLE [markerCount];
     DWORD* threadIDs = new DWORD [markerCount];
-
-    HANDLE* resumeEvents = new HANDLE [markerCount];
-    HANDLE* startEvents = new HANDLE [markerCount];
     HANDLE* stopedEvents = new HANDLE [markerCount];
-    HANDLE* killEvnets = new HANDLE [markerCount];
+
     bool* killMask = new bool [markerCount];
     for (int i=0;i<markerCount;i++) killMask[i] = false;
 
-    CRITICAL_SECTION* cs;
-
     MarkerArgs* args = new MarkerArgs [markerCount];
-    //InitializeCriticalSection(cs);
 
     for (int i=0;i<markerCount;i++)
     {
@@ -159,17 +147,14 @@ int main ()
         args[i].id = i+1;
         args[i].arrP = array;
         args[i].arrSize = arrSz;
-        args[i].cs =cs;
        // stopedEvents[i] = CreateEvent (NULL,FALSE,FALSE,NULL);
        // startEvents[i] = CreateEvent (NULL,FALSE,FALSE,NULL);
         args[i].stoppedEvent =  CreateEvent (NULL,FALSE,FALSE,NULL);
         stopedEvents[i] = args[i].stoppedEvent;
         args[i].startEvent =  CreateEvent (NULL,FALSE,FALSE,NULL);
-        startEvents[i] = args[i].startEvent;
         args[i].resumeEvent = CreateEvent (NULL,FALSE,FALSE,NULL);
-        resumeEvents[i] = args[i].resumeEvent;
         args[i].killEvent = CreateEvent (NULL,FALSE,FALSE,NULL);
-        killEvnets [i] = args[i].killEvent;
+
 
         printf ("Creating thread %d    ",i+1);
         hThreads[i] = CreateThread(NULL, 0, marker, &args[i], 0, &threadIDs[i]);
@@ -266,11 +251,8 @@ int main ()
     delete[] array;
     delete[]hThreads;
     delete[] args;
-
-    delete [] startEvents;
     delete [] stopedEvents;
-    delete [] resumeEvents;
-    delete [] killEvnets;
+
 
     return 0;
 }
