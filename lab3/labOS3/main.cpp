@@ -94,24 +94,6 @@ DWORD WINAPI marker (LPVOID argument)
 
 }
 
-void removeThread (HANDLE* hThreads, DWORD* threadIDs, MarkerArgs* args,HANDLE* hEvents,int pos,int &sz)
-{
-
-}
-
-void clearEvents (HANDLE* hEvents, int sz)
-{
-
-}
-
-void printArr (int* arr, int sz)
-{
-    for (int i=0;i<sz;i++)
-    {
-        cout<<arr[i]<<"  ";
-    }
-    cout<<endl;
-}
 
 int main ()
 {
