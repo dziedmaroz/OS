@@ -15,4 +15,8 @@ CONFIG   -= app_bundle
 TEMPLATE = app
 
 
-SOURCES += main.cpp
+SOURCES += main.cpp \
+    syncqueue.cpp
+
+HEADERS += \
+    syncqueue.h
