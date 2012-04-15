@@ -13,9 +13,10 @@ struct Arguments
 DWORD WINAPI producer (LPVOID arg)
 {
     Arguments args = *((Arguments*) arg);
-    // ждать сигнал на начало работы;
-    SyncQueue queue = *args.queueP;
+    // ждать сигнал на начало работы;	 
+    SyncQueue queue = *args.queueP; 
     WaitForSingleObject (args.startEvent,INFINITE);
+	ResetEvent (args.startEvent);
     //циклически выполнять следующие действия (количество циклов задается в параметре):
     for (int i=0;i<args.count;i++)
     {
@@ -29,8 +30,9 @@ DWORD WINAPI producer (LPVOID arg)
 
          //поспать 7 мс.
          Sleep (7);
-    }
+    }	
     SetEvent (args.startEvent);
+	ExitThread(0);
 }
 
 DWORD WINAPI consumer (LPVOID arg)
@@ -39,17 +41,18 @@ DWORD WINAPI consumer (LPVOID arg)
     SyncQueue queue = *args.queueP;
     // ждать сигнал на начало работы;
     WaitForSingleObject (args.startEvent,INFINITE);
-
+	ResetEvent (args.startEvent);
     //циклически извлекать из кольцевой очереди целые числа с интервалом в 7 мс
     //(количество циклов задается в параметре);
     for (int i=0;i<args.count;i++)
     {
-        printf ("\t%d is consumed", queue.remove());
+        printf ("\t%d is consumed\n", queue.remove());
         //при извлечении числа из кольцевой очереди, выводить на консоль сообщение:
         //"\tУпотреблено число N ", где N - номер числа, извлеченного из очереди
         Sleep (7);
     }
     SetEvent (args.startEvent);
+	ExitThread(0);
 }
 
 int main(int argc, char *argv[])
@@ -142,17 +145,29 @@ int main(int argc, char *argv[])
         }
     }
 
-
-
     //подать сигнал на начало работы потоков producer и consumer;
+	Sleep (100);
     for (int i=0;i<consCount+prodCount;i++)
     {
         SetEvent(endItAll[i]);
     }
 
     //завершить свою работу после окончания работы всех потоков producer и consumer.
-    WaitForMultipleObjects (prodCount+consCount, endItAll, true, INFINITE);
+	
+    WaitForMultipleObjects (prodCount+consCount, endItAll, TRUE, INFINITE);	
 
+	for (int i=0;i<consCount;i++)
+	{
+		CloseHandle (hConsumers[i]);
+	}
+	for (int i=0;i<prodCount;i++)
+	{
+		CloseHandle (hProducers[i]);
+	}
+	for (int i=0;i<prodCount+consCount;i++)
+	{
+		CloseHandle(endItAll[i]);
+	}
     delete[] prodPortions;
     delete[] consPortions;
 
@@ -167,3 +182,5 @@ int main(int argc, char *argv[])
     delete [] consArgs;
     return 0;
 }
+
+

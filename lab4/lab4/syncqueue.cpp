@@ -2,46 +2,65 @@
 
 SyncQueue::SyncQueue(int size)
 {
-    queue_ = new int [size];
-    hHasMoreElements =  CreateEvent (NULL,FALSE,FALSE,NULL);
+    queue_ = new int [size];     
     count_ = 0;
     size_ = size;
     head_ = 0;
     tail_ = 0;
-    hNotFull = CreateEvent (NULL,FALSE,TRUE,NULL);
+
+    notFull = CreateEvent (NULL, FALSE, TRUE, NULL);
+    notEmpty = CreateEvent (NULL,FALSE,FALSE,NULL);
+    if (!notFull || !notEmpty)
+    {
+        printf ("Error on event creation\n");
+    }
+    InitializeCriticalSection (&cs_);
+
 }
 
 int SyncQueue::remove()
 {
-    WaitForSingleObject (hHasMoreElements,INFINITE);
-    int res = queue_[head_];
+    EnterCriticalSection (&cs_);
+    if (isEmpty())
+    {       
+       ResetEvent (notEmpty);
+	   LeaveCriticalSection (&cs_);
+       WaitForSingleObject (notEmpty,INFINITE); 
+	}
+	EnterCriticalSection (&cs_);
+	int res = queue_[head_];
     head_ = (size_+head_+1)%size_;
     count_--;
-    if (count_!=0)
-    {
-        SetEvent (hHasMoreElements);
-    }
-    else
-    {
-        ResetEvent (hHasMoreElements);
-    }
+    SetEvent (notFull);
+	LeaveCriticalSection (&cs_);
     return res;
+   
+
 }
 
 void SyncQueue::insert(int x)
-{    
-    WaitForSingleObject (hNotFull, INFINITE);
-    queue_[tail_] = x;
+{
+    EnterCriticalSection (&cs_);
+    if (isFull())
+    {
+		ResetEvent (notFull);
+		LeaveCriticalSection (&cs_);		
+        WaitForSingleObject (notFull,INFINITE);        
+    }   
+	EnterCriticalSection (&cs_);
+	queue_[tail_] = x;
     tail_ = (size_+tail_+1)%size_;
     count_++;
-    if (count!=size_)
-    {
-        SetEvent (hNotFull);
-    }
-    else
-    {
-        ResetEvent (hNotFull);
-    }
+    SetEvent (notEmpty);
+    LeaveCriticalSection (&cs_);
+}
+
+SyncQueue::~SyncQueue()
+{
+    delete [] queue_;
+    CloseHandle (notFull);
+    CloseHandle (notEmpty);
+    DeleteCriticalSection (&cs_);
 }
 
 
