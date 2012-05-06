@@ -95,15 +95,35 @@ DWORD WINAPI serverThread (LPVOID arg)
 	ExitThread (0);
 }
 //запустить клиенты
-void startClients (HANDLE* hServerThread)
+void startClients (HANDLE* hServerThread, HANDLE* hClients, Arguments* args, int &clientCount,char* filename)
 {
-	*hServerThread = CreateThread (NULL,NULL,serverThread,NULL,NULL,NULL);
-	if (!hServerThread)
+
+	if (clientCount!=0)
 	{
-		printf ("ERR: Can't start server thread\n");
-		GetLastError();
-		return;
+		for (int i=0;i<clientCount;i++)
+		{
+			TerminateThread(hServerThread[i]);
+			TerminateProcess(hClients[i]);
+			CloseHandle(hServerThread);
+			CloseHandle(hClients);
+		}
+		delete [] hServerThread;
+		delete [] args;
+		delete [] hClients;
+		
 	}
+	printf ("Client count:");
+	scanf("%d",&clientCount);
+	hServerThread = new HANDLE[clientCount];
+	hClients = new HANDLE [clientCount];
+	args = new Arguments [clientCount];
+
+	for (int i=0;i<clientCount;i++)
+	{
+		
+	}
+
+
 }
 
 // выбираем какой файл обрабатывать
@@ -137,7 +157,10 @@ void print ()
 int main ()
 {
 	char* activeFilename = new char [100];
-	HANDLE hServerThread;
+	HANDLE* hServerThread;
+	HANDLE* hClients;
+	Arguments* args;
+	int clientCount;
 	InitializeCriticalSection(&cs);
 	
 	while (!die)
@@ -148,7 +171,7 @@ int main ()
 			case SHUTDOWN: die = true; kill (); break;
 			case PRINT: print (); break;
 			case MAKE: make();break;
-			case START_CLIENT: startClients (&hServerThread); break;
+			case START_CLIENT: startClients (hServerThread,hClientsl,args,clientCount,activeFilename); break;
 			case SET_PENDING: setPending (activeFilename); break;
 			case BAD_INPUT: printf ("ERR:Bad input. Use 'help' for help\n"); break;
 			case HELP: help (); break;
