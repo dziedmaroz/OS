@@ -8,11 +8,10 @@ SyncQueue::SyncQueue(int size)
     head_ = 0;
     tail_ = 0;
 
-    notFull = CreateEvent (NULL, FALSE, TRUE, NULL);
-    notEmpty = CreateEvent (NULL,FALSE,FALSE,NULL);
-    if (!notFull || !notEmpty)
+	hSemaphore = CreateSemaphore(NULL,0,size,NULL);
+    if (!hSemaphore)
     {
-        printf ("Error on event creation\n");
+        printf ("Error on semaphore creation\n");
     }
     InitializeCriticalSection (&cs_);
 
@@ -20,18 +19,10 @@ SyncQueue::SyncQueue(int size)
 
 int SyncQueue::remove()
 {
-    EnterCriticalSection (&cs_);
-    if (isEmpty())
-    {       
-       ResetEvent (notEmpty);
-	   LeaveCriticalSection (&cs_);
-       WaitForSingleObject (notEmpty,INFINITE); 
-	}
-	EnterCriticalSection (&cs_);
+	WaitForSingleObject(hSemaphore,INFINITE);
 	int res = queue_[head_];
     head_ = (size_+head_+1)%size_;
-    count_--;
-    SetEvent (notFull);
+    count_--;     
 	LeaveCriticalSection (&cs_);
     return res;
    
@@ -40,26 +31,18 @@ int SyncQueue::remove()
 
 void SyncQueue::insert(int x)
 {
-    EnterCriticalSection (&cs_);
-    if (isFull())
-    {
-		ResetEvent (notFull);
-		LeaveCriticalSection (&cs_);		
-        WaitForSingleObject (notFull,INFINITE);        
-    }   
+	while(!ReleaseSemaphore(hSemaphore,1,NULL));	
 	EnterCriticalSection (&cs_);
 	queue_[tail_] = x;
     tail_ = (size_+tail_+1)%size_;
-    count_++;
-    SetEvent (notEmpty);
+    count_++;     
     LeaveCriticalSection (&cs_);
 }
 
 SyncQueue::~SyncQueue()
 {
     delete [] queue_;
-    CloseHandle (notFull);
-    CloseHandle (notEmpty);
+	CloseHandle (hSemaphore);
     DeleteCriticalSection (&cs_);
 }
 
