@@ -14,7 +14,9 @@ class SyncQueue
     int head_;
     int tail_;
     CRITICAL_SECTION cs_;
-    HANDLE hSemaphore;
+	HANDLE hSemaphoreFill;
+	HANDLE hSemaphoreEmpty;	 
+
 public:
     SyncQueue(int size_);
     ~SyncQueue();

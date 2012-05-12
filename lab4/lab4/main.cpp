@@ -9,6 +9,7 @@ struct Arguments
     int count;
     int ID;
 };
+CRITICAL_SECTION cs;
 
 DWORD WINAPI producer (LPVOID arg)
 {
@@ -22,11 +23,13 @@ DWORD WINAPI producer (LPVOID arg)
     {
          //добавить в кольцевую очередь целое число, равное своему порядковому
          //номеру;
+	     EnterCriticalSection(&cs);
          queue.insert(args.ID);
 
          //вывести на консоль сообщение: "Произведено число: N ", где N - номер числа,
          //помещенного в очередь.
          printf ("%d is produced\n", args.ID);
+		 LeaveCriticalSection(&cs);
 
          //поспать 7 мс.
          Sleep (7);
@@ -46,10 +49,13 @@ DWORD WINAPI consumer (LPVOID arg)
     //(количество циклов задается в параметре);
     for (int i=0;i<args.count;i++)
     {
+		EnterCriticalSection(&cs);
         printf ("\t%d is consumed\n", queue.remove());
         //при извлечении числа из кольцевой очереди, выводить на консоль сообщение:
         //"\tУпотреблено число N ", где N - номер числа, извлеченного из очереди
+		LeaveCriticalSection(&cs);
         Sleep (7);
+		
     }
     SetEvent (args.startEvent);
 	ExitThread(0);
@@ -57,6 +63,8 @@ DWORD WINAPI consumer (LPVOID arg)
 
 int main(int argc, char *argv[])
 {
+
+	InitializeCriticalSection(&cs);
     //создать объект кольцевой очереди, размер очереди вводится пользователем с
     //клавиатуры;
     int queueSz = 0;
@@ -124,7 +132,7 @@ int main(int argc, char *argv[])
     HANDLE* hConsumers = new HANDLE [consCount];
     DWORD* consID = new DWORD [consCount];
     Arguments* consArgs = new Arguments[consCount];
-
+	
     for (int i=0;i<consCount;i++)
     {
         consArgs[i].count = consPortions[i];
