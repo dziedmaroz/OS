@@ -3,19 +3,22 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
+#include <conio.h>
 
 using namespace std;
+CRITICAL_SECTION cs;
 enum States {MAKE,START_CLIENT,PRINT, SET_PENDING,BAD_INPUT,EMPTY, SHUTDOWN, HELP};
 struct Arguments 
 {
 	HANDLE hWrite;
 	HANDLE hRead;
-	char* filename;
+	int ID;	
+	FILE* file;
 };
 
 
 bool die = false;
-CRITICAL_SECTION cs;
+ 
 
 //функция разбора командной строки
 States parseCmd ()
@@ -78,62 +81,150 @@ void help ()
 	printf ("help \t\t-\t prints this message\n");
 }
 // выключить сервер
-void kill()
+void kill(HANDLE* hServerThread, HANDLE* hClients, Arguments* args,DWORD* serverThreadID, int clientCount)
 {
+	{
+		for (int i=0;i<clientCount;i++)
+		{			 
+			TerminateProcess(hClients[i],0);
+			CloseHandle(hServerThread);
+			CloseHandle(hClients);
+		}
+		delete [] hServerThread;
+		delete [] args;
+		delete [] serverThreadID;
+		delete [] hClients;
 
+	}
 }
 
 
 // поток обслуживающий клиентов
 DWORD WINAPI serverThread (LPVOID arg)
 {
-	while (!die)
+
+	Arguments args = *((Arguments*) arg);
+	HANDLE hPut, hGet;
+	char lpszPut[20];
+	char lpszGet[20];  
+	wsprintf(lpszGet, "GET%d ",args.ID);
+	wsprintf(lpszPut, "PUT%d ",args.ID);
+	hPut = CreateEvent(NULL,FALSE,FALSE,lpszPut);
+	hGet = CreateEvent(NULL,FALSE,FALSE,lpszGet);
+	while(!die)
 	{
-		printf ("some\n");
-		Sleep (500);
+		
+		DWORD dwBytesWritten;
+		if (!WriteFile(args.hWrite,&args.ID,sizeof(args.ID),&dwBytesWritten,NULL))
+		{
+			_cputs("Write to file failed.\n");
+			_cputs("Press any key to finish.\n");
+			_getch();
+			return GetLastError();
+		}
+		SetEvent(hPut);
+		_cprintf("The number %d is written to the pipe.\n", args.ID);
+		WaitForSingleObject(hGet,INFINITE);
 	}
 	ExitThread (0);
 }
 //запустить клиенты
-void startClients (HANDLE* hServerThread, HANDLE* hClients, Arguments* args, int &clientCount,char* filename)
+bool startClients (HANDLE* hServerThread, HANDLE* hClients, Arguments* args,DWORD* serverThreadID, int &clientCount,FILE* file)
 {
-
-	if (clientCount!=0)
+	bool noErr = true;
+	// если уже были созданы какие-то клиенты, отключаем их	 
 	{
 		for (int i=0;i<clientCount;i++)
-		{
-			TerminateThread(hServerThread[i]);
-			TerminateProcess(hClients[i]);
+		{		
+			TerminateThread(hServerThread[i],0);
+			TerminateProcess(hClients[i],0);
 			CloseHandle(hServerThread);
 			CloseHandle(hClients);
 		}
 		delete [] hServerThread;
 		delete [] args;
+		delete [] serverThreadID;
 		delete [] hClients;
-		
+
 	}
 	printf ("Client count:");
 	scanf("%d",&clientCount);
 	hServerThread = new HANDLE[clientCount];
 	hClients = new HANDLE [clientCount];
 	args = new Arguments [clientCount];
+	serverThreadID = new DWORD [clientCount];
 
+	printf ("Process ID \t\t[Path\t\tID\thWrite\thRead\t]\n" );
 	for (int i=0;i<clientCount;i++)
 	{
-		
+		STARTUPINFO si;
+		PROCESS_INFORMATION pi;
+		HANDLE hWritePipe, hReadPipe;
+		// создаем анонимный канал
+		// устанавливает атрибуты защиты канала
+		SECURITY_ATTRIBUTES sa;
+
+		sa.nLength = sizeof(SECURITY_ATTRIBUTES);
+		sa.lpSecurityDescriptor = NULL;
+		// защита по умолчанию
+		sa.bInheritHandle = TRUE;
+		// дескрипторы наследуемые
+
+		if(!CreatePipe(	&hReadPipe,	&hWritePipe, &sa, 0))			
+		{
+			_cputs("Create pipe failed.\n");
+			_cputs("Press any key to finish.\n");
+			_getch();
+			return false;
+		}
+
+
+		char lpszComLine[80];
+		wsprintf(lpszComLine, "client.exe %d %d %d",i,(int) hReadPipe,(int) hWritePipe);
+		ZeroMemory(&si, sizeof(STARTUPINFO));
+		si.cb = sizeof(STARTUPINFO);
+
+		// запускаем клиента
+		if (!CreateProcess(NULL,lpszComLine,NULL,	NULL,TRUE,	CREATE_NEW_CONSOLE,	NULL,	NULL, &si,&pi)			)
+		{
+			_cputs("Create process failed.\n");
+			_cputs("Press any key to finish.\n");
+			_getch();
+			return false;
+		}
+		else
+		{
+			printf ("Process %d \t\t[%s\t%d\t%d\t%d\t]\t [OK]\n",i+1,"client.exe",i,(int) hReadPipe,(int) hWritePipe);
+		}
+		hClients [i]= pi.hProcess;
+
+		args[i].file = file;
+		args[i].hRead = hReadPipe;
+		args[i].hWrite = hWritePipe;
+		args[i].ID = i;		
+		// запускаем поток, связанный с этим клиентом
+		hServerThread[i] = CreateThread(NULL,NULL,serverThread,(void*)&args[i],NULL,&serverThreadID[i]);
+		if (!hServerThread[i]) 
+		{
+			_cputs("Create server threa failed.\n");
+			_cputs("Press any key to finish.\n");
+			_getch();
+			return false;
+		}
 	}
-
-
 }
 
 // выбираем какой файл обрабатывать
-void setPending (char* &filename)
+void setPending (FILE* file)
 {
+
 	printf ("Set filename: ");
+	char filename[100];
 	scanf ("%s",&filename);
+	file = fopen (filename,"r+b");
 }
 
-// вывести активный файл
+// вывести файл
 void print ()
 {
 	char* filename = new char [100];
@@ -154,30 +245,39 @@ void print ()
 	}
 	fclose (fin);
 }
-int main ()
+int main()
 {
-	char* activeFilename = new char [100];
-	HANDLE* hServerThread;
-	HANDLE* hClients;
-	Arguments* args;
-	int clientCount;
+	FILE* activeFile = NULL;
+	HANDLE* hServerThread=NULL;
+	HANDLE* hClients=NULL;
+	DWORD* serverThreadID=NULL;
+	Arguments* args=NULL;
+	int clientCount=0;
 	InitializeCriticalSection(&cs);
-	
+
 	while (!die)
 	{
 		switch (parseCmd ())
 		{
-			case EMPTY: break;
-			case SHUTDOWN: die = true; kill (); break;
-			case PRINT: print (); break;
-			case MAKE: make();break;
-			case START_CLIENT: startClients (hServerThread,hClientsl,args,clientCount,activeFilename); break;
-			case SET_PENDING: setPending (activeFilename); break;
-			case BAD_INPUT: printf ("ERR:Bad input. Use 'help' for help\n"); break;
-			case HELP: help (); break;
+			// пустой ввод
+		case EMPTY: break;
+			// выключить
+		case SHUTDOWN: die = true; kill (hServerThread,hClients,args,serverThreadID,clientCount); break;
+			// вывести файл
+		case PRINT: print (); break;
+			//	создать файл с базой
+		case MAKE: make();break;
+			// запустить клиентов
+		case START_CLIENT: startClients (hServerThread,hClients,args,serverThreadID,clientCount,activeFile); break;
+			// установить файл с базой
+		case SET_PENDING: setPending (activeFile); if (!activeFile) printf("ERR:File not exist\n"); break;
+			//	ошибка ввода
+		case BAD_INPUT: printf ("ERR:Bad input. Use 'help' for help\n"); break;
+			// помощь по командам
+		case HELP: help (); break;
 		}
-
 	}
-	delete [] activeFilename;
+
+	if (activeFile) fclose (activeFile);	
 	return 0;
 }
