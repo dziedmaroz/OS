@@ -18,7 +18,7 @@ struct Arguments
 
 
 bool die = false;
- 
+
 
 //функция разбора командной строки
 States parseCmd ()
@@ -113,18 +113,162 @@ DWORD WINAPI serverThread (LPVOID arg)
 	hGet = CreateEvent(NULL,FALSE,FALSE,lpszGet);
 	while(!die)
 	{
-		
+		DWORD dwBytesRead;
 		DWORD dwBytesWritten;
-		if (!WriteFile(args.hWrite,&args.ID,sizeof(args.ID),&dwBytesWritten,NULL))
-		{
-			_cputs("Write to file failed.\n");
-			_cputs("Press any key to finish.\n");
-			_getch();
-			return GetLastError();
-		}
-		SetEvent(hPut);
-		_cprintf("The number %d is written to the pipe.\n", args.ID);
 		WaitForSingleObject(hGet,INFINITE);
+		printf ("[] Got connetcion\n");
+		int request = 0;
+		if (!ReadFile(args.hRead,&request,	sizeof(request),&dwBytesRead,	NULL))
+		{
+			EnterCriticalSection(&cs);
+			_cputs("Read from the pipe failed.\n");
+			_cputs("Press any key to finish.\n");
+			LeaveCriticalSection(&cs);
+			_getch();		
+			ExitThread( GetLastError());
+		}
+		if (request == READ)
+		{
+			SetEvent(hPut);
+			WaitForSingleObject(hGet,INFINITE);
+			char key [10];
+			if (!ReadFile(args.hRead,&key,	sizeof(key),&dwBytesRead,	NULL))
+			{
+				EnterCriticalSection(&cs);
+				_cputs("Read from the pipe failed.\n");
+				_cputs("Press any key to finish.\n");
+				LeaveCriticalSection(&cs);
+				_getch();		
+				ExitThread( GetLastError());
+			}			
+			EnterCriticalSection(&cs);
+			Order order;
+			rewind(args.file);
+			bool notFound = true;
+			while (!feof(args.file))
+			{				
+				fread (&order,sizeof(Order),1,args.file);
+				if (!strcmp(order.name,key))
+				{
+					notFound = false;
+					break;
+				}
+			}
+			LeaveCriticalSection(&cs);
+			if (notFound)
+			{
+				if (!WriteFile(args.hWrite,&NOT_FOUND,sizeof(NOT_FOUND),&dwBytesWritten,NULL))
+				{
+					EnterCriticalSection(&cs);
+					_cputs("Write to file failed.\n");
+					_cputs("Press any key to finish.\n");
+					_getch();
+					LeaveCriticalSection(&cs);
+					return GetLastError();
+				}
+				SetEvent(hPut);
+				continue;
+			}
+			if (!WriteFile(args.hWrite,&OK,sizeof(OK),&dwBytesWritten,NULL))
+			{
+				EnterCriticalSection(&cs);
+				_cputs("Write to file failed.\n");
+				_cputs("Press any key to finish.\n");
+				_getch();
+				LeaveCriticalSection(&cs);
+				return GetLastError();
+			}
+			SetEvent(hPut);
+			WaitForSingleObject(hGet,INFINITE);
+			if (!WriteFile(args.hWrite,&order,sizeof(order),&dwBytesWritten,NULL))
+			{
+				EnterCriticalSection(&cs);
+				_cputs("Write to file failed.\n");
+				_cputs("Press any key to finish.\n");
+				_getch();
+				LeaveCriticalSection(&cs);
+				return GetLastError();
+			}
+			SetEvent(hPut);
+			continue;
+		}
+		if (request == MODIFY)
+		{
+			SetEvent(hPut);
+			WaitForSingleObject(hGet,INFINITE);
+			char key [10];
+			if (!ReadFile(args.hRead,&key,	sizeof(key),&dwBytesRead,	NULL))
+			{
+				EnterCriticalSection(&cs);
+				_cputs("Read from the pipe failed.\n");
+				_cputs("Press any key to finish.\n");
+				LeaveCriticalSection(&cs);
+				_getch();		
+				ExitThread( GetLastError());
+			}			
+			EnterCriticalSection(&cs);
+			Order order;
+			rewind(args.file);
+			bool notFound = true;
+			while (!feof(args.file))
+			{				
+				fread (&order,sizeof(Order),1,args.file);
+				if (!strcmp(order.name,key))
+				{
+					notFound = false;
+					break;
+				}
+			}
+			if (notFound)
+			{
+				if (!WriteFile(args.hWrite,&NOT_FOUND,sizeof(NOT_FOUND),&dwBytesWritten,NULL))
+				{
+					EnterCriticalSection(&cs);
+					_cputs("Write to file failed.\n");
+					_cputs("Press any key to finish.\n");
+					_getch();
+					LeaveCriticalSection(&cs);
+					return GetLastError();
+				}
+				SetEvent(hPut);
+				continue;
+			}
+			if (!WriteFile(args.hWrite,&OK,sizeof(OK),&dwBytesWritten,NULL))
+			{
+				EnterCriticalSection(&cs);
+				_cputs("Write to file failed.\n");
+				_cputs("Press any key to finish.\n");
+				_getch();
+				LeaveCriticalSection(&cs);
+				return GetLastError();
+			}
+			SetEvent(hPut);
+			WaitForSingleObject(hGet,INFINITE);
+			if (!WriteFile(args.hWrite,&order,sizeof(order),&dwBytesWritten,NULL))
+			{
+				EnterCriticalSection(&cs);
+				_cputs("Write to file failed.\n");
+				_cputs("Press any key to finish.\n");
+				_getch();
+				LeaveCriticalSection(&cs);
+				return GetLastError();
+			}
+			SetEvent(hPut);
+			WaitForSingleObject(hGet,INFINITE);
+			if (!ReadFile(args.hRead,&order,	sizeof(order),&dwBytesRead,	NULL))
+			{
+				EnterCriticalSection(&cs);
+				_cputs("Read from the pipe failed.\n");
+				_cputs("Press any key to finish.\n");
+				LeaveCriticalSection(&cs);
+				_getch();		
+				ExitThread( GetLastError());
+			}
+			fseek(args.file,sizeof(Order),SEEK_CUR);
+			fwrite(&order,sizeof(order),1,args.file);
+			LeaveCriticalSection(&cs);
+			continue;
+		}		
 	}
 	ExitThread (0);
 }
@@ -215,7 +359,7 @@ bool startClients (HANDLE* hServerThread, HANDLE* hClients, Arguments* args,DWOR
 }
 
 // выбираем какой файл обрабатывать
-void setPending (FILE* file)
+void setPending (FILE* &file)
 {
 
 	printf ("Set filename: ");
